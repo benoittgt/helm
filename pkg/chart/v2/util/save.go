@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/yaml"
 
 	"helm.sh/helm/v4/pkg/chart/common"
@@ -53,15 +54,28 @@ func SaveDir(c *chart.Chart, dest string) error {
 		return err
 	}
 
-	// Save the chart file.
-	if err := SaveChartfile(filepath.Join(outdir, ChartfileName), c.Metadata); err != nil {
-		return err
+	// Check if Chart has raw metadata stored
+	hasRawMetadata := false
+	for _, f := range c.Raw {
+		if f.Name == ChartfileName {
+			hasRawMetadata = true
+		}
 	}
 
-	// Save values.yaml
+	// This ensures that the Chart always has raw metadata stored, since some tests
+	// call SaveDir without adding raw metadata to the Chart.
+	if !hasRawMetadata {
+		b, err := yaml.Marshal(c.Metadata)
+		if err != nil {
+			return fmt.Errorf("reading charts file: %w", err)
+		}
+		c.Raw = append(c.Raw, &chart.File{Name: ChartfileName, Data: b})
+	}
+
+	// Save values.yaml and Chart.yaml
 	for _, f := range c.Raw {
-		if f.Name == ValuesfileName {
-			vf := filepath.Join(outdir, ValuesfileName)
+		if slices.Contains([]string{ValuesfileName, ChartfileName}, f.Name) {
+			vf := filepath.Join(outdir, f.Name)
 			if err := writeFile(vf, f.Data); err != nil {
 				return err
 			}
