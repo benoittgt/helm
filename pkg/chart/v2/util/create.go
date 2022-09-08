@@ -649,7 +649,15 @@ spec:
 var Stderr io.Writer = os.Stderr
 
 // CreateFrom creates a new chart, but scaffolds it from the src chart.
-func CreateFrom(name, dest, src string, keepMetadata bool) error {
+// Deprecated: Use CreateFromWithMetadata
+// TODO Helm 4: Fold CreateFromWithMetadata back into CreateFrom
+func CreateFrom(chartfile *chart.Metadata, dest, src string) error {
+	return CreateFromWithMetadata(chartfile.Name, dest, src, false)
+}
+
+// CreateFromWithMetadata creates a new chart, but scaffolds it from the src chart and
+// provides the option to preserve custom metadata (Chart.yaml) files.
+func CreateFromWithMetadata(name, dest, src string, keepMetadata bool) error {
 	schart, err := loader.Load(src)
 	if err != nil {
 		return fmt.Errorf("could not load %s: %w", src, err)
