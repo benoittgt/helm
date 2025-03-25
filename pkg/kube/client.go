@@ -104,7 +104,7 @@ func New(getter genericclioptions.RESTClientGetter) *Client {
 	}
 	return &Client{
 		Factory: cmdutil.NewFactory(getter),
-		Log:     nopLogger,
+		Log:     DefaultLogger,
 	}
 }
 
