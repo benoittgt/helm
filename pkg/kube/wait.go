@@ -85,7 +85,7 @@ func (w *waiter) isRetryableError(err error, resource *resource.Info) bool {
 	if err == nil {
 		return false
 	}
-	w.log.Debug("error received when checking status of resource", "error", err, "resourceName", resource.Name, "resourceDetails", resource)
+	w.log.Debug("error received when checking status of resource", "error", err, "resourceNamespace", resource.Namespace, "resourceName", resource.Name, "resourceDetails", resource)
 	if ev, ok := err.(*apierrors.StatusError); ok {
 		statusCode := ev.Status().Code
 		retryable := w.isRetryableHTTPStatusCode(statusCode)
