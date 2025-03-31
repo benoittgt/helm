@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	logadapter "helm.sh/helm/v4/internal/log"
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
@@ -38,6 +37,8 @@ import (
 	"k8s.io/cli-runtime/pkg/resource"
 
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	logadapter "helm.sh/helm/v4/internal/log"
 )
 
 type waiter struct {

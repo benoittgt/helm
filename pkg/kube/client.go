@@ -31,7 +31,6 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/pkg/errors"
-	logadapter "helm.sh/helm/v4/internal/log"
 	batch "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -58,6 +57,8 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/client-go/util/retry"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	logadapter "helm.sh/helm/v4/internal/log"
 )
 
 // ErrNoObjectsVisited indicates that during a visit operation, no matching objects were found.
