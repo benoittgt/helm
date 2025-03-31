@@ -19,6 +19,7 @@ import (
 	"context"
 	"testing"
 
+	logadapter "helm.sh/helm/v4/internal/log"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,7 +38,7 @@ const defaultNamespace = metav1.NamespaceDefault
 func Test_ReadyChecker_IsReady_Pod(t *testing.T) {
 	type fields struct {
 		client        kubernetes.Interface
-		log           Logger
+		log           logadapter.Logger
 		checkJobs     bool
 		pausedAsReady bool
 	}
@@ -661,7 +662,7 @@ func Test_ReadyChecker_IsReady_ReplicationController(t *testing.T) {
 func Test_ReadyChecker_IsReady_ReplicaSet(t *testing.T) {
 	type fields struct {
 		client        kubernetes.Interface
-		log           Logger
+		log           logadapter.Logger
 		checkJobs     bool
 		pausedAsReady bool
 	}
@@ -681,7 +682,7 @@ func Test_ReadyChecker_IsReady_ReplicaSet(t *testing.T) {
 			name: "IsReady ReplicaSet",
 			fields: fields{
 				client:        fake.NewSimpleClientset(),
-				log:           DefaultLogger,
+				log:           logadapter.DefaultLogger,
 				checkJobs:     true,
 				pausedAsReady: false,
 			},
@@ -697,7 +698,7 @@ func Test_ReadyChecker_IsReady_ReplicaSet(t *testing.T) {
 			name: "IsReady ReplicaSet not ready",
 			fields: fields{
 				client:        fake.NewSimpleClientset(),
-				log:           DefaultLogger,
+				log:           logadapter.DefaultLogger,
 				checkJobs:     true,
 				pausedAsReady: false,
 			},

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	logadapter "helm.sh/helm/v4/internal/log"
 	appsv1 "k8s.io/api/apps/v1"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	appsv1beta2 "k8s.io/api/apps/v1beta2"
@@ -42,7 +43,7 @@ import (
 type waiter struct {
 	c       ReadyChecker
 	timeout time.Duration
-	log     Logger
+	log     logadapter.Logger
 }
 
 // waitForResources polls to get the current status of all pods, PVCs, Services and

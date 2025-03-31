@@ -31,6 +31,7 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/pkg/errors"
+	logadapter "helm.sh/helm/v4/internal/log"
 	batch "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -79,7 +80,7 @@ type Client struct {
 	// needs. The smaller surface area of the interface means there is a lower
 	// chance of it changing.
 	Factory Factory
-	Log     Logger
+	Log     logadapter.Logger
 	// Namespace allows to bypass the kubeconfig file for the choice of the namespace
 	Namespace string
 
@@ -104,7 +105,6 @@ func New(getter genericclioptions.RESTClientGetter) *Client {
 	}
 	return &Client{
 		Factory: cmdutil.NewFactory(getter),
-		Log:     DefaultLogger,
 	}
 }
 
