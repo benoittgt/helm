@@ -40,8 +40,12 @@ var (
 	nonExistingChartFilePath = filepath.Join(os.TempDir(), "Chart.yaml")
 )
 
-var badChart, _ = chartutil.LoadChartfile(badChartFilePath)
 var badChartName, _ = chartutil.LoadChartfile(badChartNamePath)
+
+func getFreshBadChart() *chart.Metadata {
+	freshChart, _ := chartutil.LoadChartfile(badChartFilePath)
+	return freshChart
+}
 
 // Validation functions Test
 func TestValidateChartYamlNotDirectory(t *testing.T) {
@@ -67,7 +71,7 @@ func TestValidateChartYamlFormat(t *testing.T) {
 }
 
 func TestValidateChartName(t *testing.T) {
-	err := validateChartName(badChart)
+	err := validateChartName(getFreshBadChart())
 	if err == nil {
 		t.Errorf("validateChartName to return a linter error, got no error")
 	}
@@ -90,6 +94,8 @@ func TestValidateChartVersion(t *testing.T) {
 	}
 
 	var successTest = []string{"0.0.1", "0.0.1+build", "0.0.1-beta"}
+
+	badChart := getFreshBadChart()
 
 	for _, test := range failTest {
 		badChart.Version = test.Version
@@ -127,6 +133,8 @@ func TestValidateChartMaintainer(t *testing.T) {
 		{"John Snow", "john@winterfell.com"},
 	}
 
+	badChart := getFreshBadChart()
+
 	for _, test := range failTest {
 		badChart.Maintainers = []*chart.Maintainer{{Name: test.Name, Email: test.Email}}
 		err := validateChartMaintainer(badChart)
@@ -145,6 +153,8 @@ func TestValidateChartMaintainer(t *testing.T) {
 }
 
 func TestValidateChartSources(t *testing.T) {
+	badChart := getFreshBadChart()
+
 	var failTest = []string{"", "RiverRun", "john@winterfell", "riverrun.io"}
 	var successTest = []string{"http://riverrun.io", "https://riverrun.io", "https://riverrun.io/blackfish"}
 	for _, test := range failTest {
@@ -192,6 +202,7 @@ func TestValidateChartIconPresence(t *testing.T) {
 }
 
 func TestValidateChartIconURL(t *testing.T) {
+	badChart := getFreshBadChart()
 	var failTest = []string{"RiverRun", "john@winterfell", "riverrun.io"}
 	var successTest = []string{"http://riverrun.io", "https://riverrun.io", "https://riverrun.io/blackfish.png"}
 	for _, test := range failTest {
