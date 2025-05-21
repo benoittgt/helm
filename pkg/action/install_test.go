@@ -566,9 +566,29 @@ func TestInstallRelease_Wait_Interrupted(t *testing.T) {
 	is.Error(err)
 	is.Contains(err.Error(), "context canceled")
 
-	is.Equal(goroutines+1, runtime.NumGoroutine()) // installation goroutine still is in background
-	time.Sleep(10 * time.Second)                   // wait for goroutine to finish
-	is.Equal(goroutines, runtime.NumGoroutine())
+	is.Equal(goroutines+1, runtime.NumGoroutine()) // installation goroutine still in background
+
+	// Poll for goroutine cleanup with timeout
+	timeout := time.After(15 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	// Wait for goroutines to return to original count
+	for {
+		select {
+		case <-ticker.C:
+			if runtime.NumGoroutine() == goroutines {
+				// Success case - goroutines cleaned up
+				return
+			}
+		case <-timeout:
+			// Timeout case - test fails
+			is.Equal(goroutines, runtime.NumGoroutine(),
+				"Timed out waiting for goroutine cleanup. Expected %d goroutines, got %d",
+				goroutines, runtime.NumGoroutine())
+			return
+		}
+	}
 }
 func TestInstallRelease_WaitForJobs(t *testing.T) {
 	is := assert.New(t)
