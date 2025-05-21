@@ -493,7 +493,12 @@ func TestWait(t *testing.T) {
 			switch {
 			case p == "/api/v1/namespaces/default/pods/starfish" && m == http.MethodGet:
 				pod := &podList.Items[0]
-				if created != nil && time.Since(*created) >= time.Second*5 {
+
+				createdMu.Lock()
+				isPodReady := created != nil && time.Since(*created) >= time.Second*5
+				createdMu.Unlock()
+
+				if isPodReady {
 					pod.Status.Conditions = []v1.PodCondition{
 						{
 							Type:   v1.PodReady,
@@ -504,7 +509,12 @@ func TestWait(t *testing.T) {
 				return newResponse(http.StatusOK, pod)
 			case p == "/api/v1/namespaces/default/pods/otter" && m == http.MethodGet:
 				pod := &podList.Items[1]
-				if created != nil && time.Since(*created) >= time.Second*5 {
+
+				createdMu.Lock()
+				isPodReady := created != nil && time.Since(*created) >= time.Second*5
+				createdMu.Unlock()
+
+				if isPodReady {
 					pod.Status.Conditions = []v1.PodCondition{
 						{
 							Type:   v1.PodReady,
@@ -515,7 +525,12 @@ func TestWait(t *testing.T) {
 				return newResponse(http.StatusOK, pod)
 			case p == "/api/v1/namespaces/default/pods/squid" && m == http.MethodGet:
 				pod := &podList.Items[2]
-				if created != nil && time.Since(*created) >= time.Second*5 {
+
+				createdMu.Lock()
+				isPodReady := created != nil && time.Since(*created) >= time.Second*5
+				createdMu.Unlock()
+
+				if isPodReady {
 					pod.Status.Conditions = []v1.PodCondition{
 						{
 							Type:   v1.PodReady,
@@ -568,21 +583,27 @@ func TestWait(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// First wait without holding the mutex
 	if err := c.Wait(allResources, time.Second*30); err != nil {
 		t.Errorf("expected wait without error, got %s", err)
 	}
 
-	// Safely check the created time
+	// Then safely check the created time
 	createdMu.Lock()
-	if created == nil {
-		createdMu.Unlock()
-		t.Fatalf("expected 'created' timestamp to be set, but it was nil")
+	createdIsNil := created == nil
+	var timeSince time.Duration
+	if !createdIsNil {
+		timeSince = time.Since(*created)
+		t.Logf("Time since created: %v", timeSince)
 	}
-	timeSince := time.Since(*created)
 	createdMu.Unlock()
 
+	if createdIsNil {
+		t.Fatalf("expected 'created' timestamp to be set, but it was nil")
+	}
+
 	if timeSince < time.Second*5 {
-		t.Errorf("expected to wait at least 5 seconds before ready status was detected, but got %s", timeSince)
+		t.Errorf("expected to wait at least 5 seconds, got %s", timeSince)
 	}
 }
 
