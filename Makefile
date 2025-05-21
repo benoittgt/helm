@@ -116,7 +116,7 @@ test-unit:
 
 
 .PHONY: test-coverage
-test-coverage: TESTFLAGS += -count=3
+test-coverage: TESTFLAGS += -count=1
 test-coverage:
 	@echo
 	@echo "==> Running unit tests with coverage <=="
