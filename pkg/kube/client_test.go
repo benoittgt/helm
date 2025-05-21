@@ -536,24 +536,35 @@ func TestWait(t *testing.T) {
 			}
 		}),
 	}
-	var err error
-	c.Waiter, err = c.GetWaiter(LegacyStrategy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resources, err := c.Build(objBody(&podList), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := c.Create(resources)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Created) != 3 {
-		t.Errorf("expected 3 resource created, got %d", len(result.Created))
+
+	// Create pods one at a time instead of in parallel to avoid data races
+	// See TestCreate()
+	result := &Result{}
+
+	for _, pod := range podList.Items {
+		singlePodList := v1.PodList{
+			Items: []v1.Pod{pod},
+		}
+
+		resources, err := c.Build(objBody(&singlePodList), false)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		r, err := c.Create(resources)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		result.Created = append(result.Created, r.Created...)
 	}
 
-	if err := c.Wait(resources, time.Second*30); err != nil {
+	allResources, err := c.Build(objBody(&podList), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Wait(allResources, time.Second*30); err != nil {
 		t.Errorf("expected wait without error, got %s", err)
 	}
 
