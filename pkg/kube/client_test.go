@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -480,6 +481,7 @@ func TestPerform(t *testing.T) {
 func TestWait(t *testing.T) {
 	podList := newPodList("starfish", "otter", "squid")
 
+	var createdMu sync.Mutex
 	var created *time.Time
 
 	c := newTestClient(t)
@@ -528,7 +530,9 @@ func TestWait(t *testing.T) {
 					t.Fatal(err)
 				}
 				now := time.Now()
+				createdMu.Lock()
 				created = &now
+				createdMu.Unlock()
 				return newResponse(http.StatusOK, resources[0].Object)
 			default:
 				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.Path)
@@ -568,8 +572,17 @@ func TestWait(t *testing.T) {
 		t.Errorf("expected wait without error, got %s", err)
 	}
 
-	if time.Since(*created) < time.Second*5 {
-		t.Errorf("expected to wait at least 5 seconds before ready status was detected, but got %s", time.Since(*created))
+	// Safely check the created time
+	createdMu.Lock()
+	if created == nil {
+		createdMu.Unlock()
+		t.Fatalf("expected 'created' timestamp to be set, but it was nil")
+	}
+	timeSince := time.Since(*created)
+	createdMu.Unlock()
+
+	if timeSince < time.Second*5 {
+		t.Errorf("expected to wait at least 5 seconds before ready status was detected, but got %s", timeSince)
 	}
 }
 
