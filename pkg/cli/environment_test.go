@@ -28,6 +28,8 @@ import (
 )
 
 func TestSetNamespace(t *testing.T) {
+	defer resetEnv()()
+
 	settings := New()
 
 	if settings.namespace != "" {
@@ -42,6 +44,8 @@ func TestSetNamespace(t *testing.T) {
 }
 
 func TestEnvSettings(t *testing.T) {
+	defer resetEnv()()
+
 	tests := []struct {
 		name string
 
