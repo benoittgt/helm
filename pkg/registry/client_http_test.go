@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 	"oras.land/oras-go/v2/content"
@@ -39,7 +41,18 @@ func (suite *HTTPRegistryClientTestSuite) SetupSuite() {
 }
 
 func (suite *HTTPRegistryClientTestSuite) TearDownSuite() {
-	teardown(&suite.TestSuite)
+	// Add a small delay to allow in-flight network operations to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// Use a sync.WaitGroup to ensure all network operations complete
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		teardown(&suite.TestSuite)
+	}()
+	wg.Wait()
+
 	os.RemoveAll(suite.WorkspaceDir)
 }
 
