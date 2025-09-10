@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Helm Chart Values",
+  "description": "Schema for sample-chart values.yaml",
+  "type": "object",
+  "properties": {
+    "image": {
+      "$ref": "./library.json"
+    }
+  },
+  "additionalProperties": true
+}

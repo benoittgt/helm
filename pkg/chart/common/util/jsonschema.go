@@ -83,7 +83,7 @@ func ValidateAgainstSchema(ch chart.Charter, values map[string]interface{}) erro
 	var sb strings.Builder
 	if chrt.Schema() != nil {
 		slog.Debug("[Benoit] chart name", "ChartFullPath", chrt.ChartFullPath())
-		// Use an in-memory loader backed by chart files to resolve relative $ref.
+		// In memory loader
 		err := validateAgainstSingleSchemaWithResources(values, chrt.Schema(), chrt.Files())
 		if err != nil {
 			sb.WriteString(fmt.Sprintf("%s:\n", chrt.Name()))
@@ -136,13 +136,12 @@ func ValidateAgainstSingleSchema(values common.Values, schemaJSON []byte, baseDi
 
 	compiler := jsonschema.NewCompiler()
 	compiler.UseLoader(loader)
-	// Determine a robust base directory for resolving $ref
 	absBaseDir, _ := filepath.Abs(baseDir)
 	useDir := ""
 	if fi, err := os.Stat(absBaseDir); err == nil && fi.IsDir() {
 		useDir = absBaseDir
 	} else {
-		// Heuristic: if baseDir looks like a chart name and matches the cwd basename, use cwd
+		// if baseDir looks like a chart name and matches the cwd basename, use cwd 😕
 		if cwd, err := os.Getwd(); err == nil {
 			if filepath.Base(cwd) == baseDir {
 				useDir = cwd
@@ -182,6 +181,7 @@ func ValidateAgainstSingleSchema(values common.Values, schemaJSON []byte, baseDi
 type chartURLLoader struct{ files map[string][]byte }
 
 func (l chartURLLoader) Load(urlStr string) (any, error) {
+	slog.Debug("[Benoit] chartURLLoader.Load", "urlStr", urlStr)
 	u, err := gourl.Parse(urlStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid chart URL %q: %w", urlStr, err)
@@ -192,6 +192,7 @@ func (l chartURLLoader) Load(urlStr string) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("chart resource not found: %s", u.String())
 	}
+	slog.Debug("[Benoit] json look like ", "data", string(data))
 	return jsonschema.UnmarshalJSON(bytes.NewReader(data))
 }
 
