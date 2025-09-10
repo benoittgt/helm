@@ -23,6 +23,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	gourl "net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -79,8 +82,9 @@ func ValidateAgainstSchema(ch chart.Charter, values map[string]interface{}) erro
 	}
 	var sb strings.Builder
 	if chrt.Schema() != nil {
-		slog.Debug("chart name", "chart-name", chrt.Name())
-		err := ValidateAgainstSingleSchema(values, chrt.Schema())
+		slog.Debug("[Benoit] chart name", "ChartFullPath", chrt.ChartFullPath())
+		// Use an in-memory loader backed by chart files to resolve relative $ref.
+		err := validateAgainstSingleSchemaWithResources(values, chrt.Schema(), chrt.Files())
 		if err != nil {
 			sb.WriteString(fmt.Sprintf("%s:\n", chrt.Name()))
 			sb.WriteString(err.Error())
@@ -107,7 +111,8 @@ func ValidateAgainstSchema(ch chart.Charter, values map[string]interface{}) erro
 }
 
 // ValidateAgainstSingleSchema checks that values does not violate the structure laid out in this schema
-func ValidateAgainstSingleSchema(values common.Values, schemaJSON []byte) (reterr error) {
+func ValidateAgainstSingleSchema(values common.Values, schemaJSON []byte, baseDir string) (reterr error) {
+	slog.Debug("[Benoit] first logs entry", "chartDir", baseDir)
 	defer func() {
 		if r := recover(); r != nil {
 			reterr = fmt.Errorf("unable to validate schema: %s", r)
@@ -131,12 +136,36 @@ func ValidateAgainstSingleSchema(values common.Values, schemaJSON []byte) (reter
 
 	compiler := jsonschema.NewCompiler()
 	compiler.UseLoader(loader)
-	err = compiler.AddResource("file:///values.schema.json", schema)
+	// Determine a robust base directory for resolving $ref
+	absBaseDir, _ := filepath.Abs(baseDir)
+	useDir := ""
+	if fi, err := os.Stat(absBaseDir); err == nil && fi.IsDir() {
+		useDir = absBaseDir
+	} else {
+		// Heuristic: if baseDir looks like a chart name and matches the cwd basename, use cwd
+		if cwd, err := os.Getwd(); err == nil {
+			if filepath.Base(cwd) == baseDir {
+				useDir = cwd
+			}
+		}
+	}
+	var base string
+	if useDir != "" {
+		slog.Debug("[Benoit] adding file URL loader with base", "base", useDir)
+		base = "file://" + filepath.ToSlash(useDir) + "/values.schema.json"
+	} else {
+		// Fallback to a stable in-memory base; relative refs won’t resolve to files
+		slog.Debug("[Benoit] base dir invalid; falling back to default base URL")
+		base = "file:///values.schema.json"
+	}
+	slog.Debug("[Benoit] base for file URL loader", "base", base)
+
+	err = compiler.AddResource(base, schema)
 	if err != nil {
 		return err
 	}
 
-	validator, err := compiler.Compile("file:///values.schema.json")
+	validator, err := compiler.Compile(base)
 	if err != nil {
 		return err
 	}
@@ -146,6 +175,66 @@ func ValidateAgainstSingleSchema(values common.Values, schemaJSON []byte) (reter
 		return JSONSchemaValidationError{err}
 	}
 
+	return nil
+}
+
+// chartURLLoader loads resources from the chart's Files array using a custom scheme "chart".
+type chartURLLoader struct{ files map[string][]byte }
+
+func (l chartURLLoader) Load(urlStr string) (any, error) {
+	u, err := gourl.Parse(urlStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid chart URL %q: %w", urlStr, err)
+	}
+	// Normalize the path key: drop leading '/'
+	key := strings.TrimPrefix(u.Path, "/")
+	data, ok := l.files[key]
+	if !ok {
+		return nil, fmt.Errorf("chart resource not found: %s", u.String())
+	}
+	return jsonschema.UnmarshalJSON(bytes.NewReader(data))
+}
+
+func validateAgainstSingleSchemaWithResources(values common.Values, schemaJSON []byte, files []*common.File) (reterr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			reterr = fmt.Errorf("unable to validate schema: %s", r)
+		}
+	}()
+
+	schema, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
+	if err != nil {
+		return err
+	}
+	// Build files map
+	fm := make(map[string][]byte, len(files))
+	for _, f := range files {
+		// Names are relative to chart root, normalized to forward slashes already
+		fm[f.Name] = f.Data
+	}
+
+	loader := jsonschema.SchemeURLLoader{
+		"chart": chartURLLoader{files: fm},
+		"http":  newHTTPURLLoader(),
+		"https": newHTTPURLLoader(),
+		// Keep file loader as a fallback if absolute file refs are used
+		"file": jsonschema.FileLoader{},
+	}
+
+	compiler := jsonschema.NewCompiler()
+	compiler.UseLoader(loader)
+	base := "chart:///values.schema.json"
+	slog.Debug("[Benoit] using in-memory chart base", "base", base)
+	if err := compiler.AddResource(base, schema); err != nil {
+		return err
+	}
+	validator, err := compiler.Compile(base)
+	if err != nil {
+		return err
+	}
+	if err := validator.Validate(values.AsMap()); err != nil {
+		return JSONSchemaValidationError{err}
+	}
 	return nil
 }
 

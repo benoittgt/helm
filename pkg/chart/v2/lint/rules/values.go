@@ -18,6 +18,7 @@ package rules
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -75,5 +76,7 @@ func validateValuesFile(valuesPath string, overrides map[string]interface{}) err
 	if err != nil {
 		return err
 	}
-	return util.ValidateAgainstSingleSchema(coalescedValues, schema)
+	baseDir := filepath.Dir(schemaPath)
+	slog.Debug("[Benoit][v2] util.ValidateAgainstSingleSchema", "valuesPath", valuesPath, "schemaPath", schemaPath, "baseDir", baseDir)
+	return util.ValidateAgainstSingleSchema(coalescedValues, schema, baseDir)
 }
