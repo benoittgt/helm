@@ -454,7 +454,7 @@ func (u *Upgrade) releasingUpgrade(c chan<- resultMessage, upgradedRelease *rele
 	// pre-upgrade hooks
 
 	if !u.DisableHooks {
-		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.WaitStrategy, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(upgradedRelease, release.HookPreUpgrade, u.WaitStrategy, u.Timeout, serverSideApply, u.DisableOpenAPIValidation); err != nil {
 			u.reportToPerformUpgrade(c, upgradedRelease, kube.ResourceList{}, fmt.Errorf("pre-upgrade hooks failed: %s", err))
 			return
 		}
@@ -463,12 +463,17 @@ func (u *Upgrade) releasingUpgrade(c chan<- resultMessage, upgradedRelease *rele
 	}
 
 	upgradeClientSideFieldManager := isReleaseApplyMethodClientSideApply(originalRelease.ApplyMethod) && serverSideApply // Update client-side field manager if transitioning from client-side to server-side apply
+	fieldValidationDirective := kube.FieldValidationDirectiveWarn
+	if u.DisableOpenAPIValidation {
+		fieldValidationDirective = kube.FieldValidationDirectiveIgnore
+	}
 	results, err := u.cfg.KubeClient.Update(
 		current,
 		target,
 		kube.ClientUpdateOptionForceReplace(u.ForceReplace),
 		kube.ClientUpdateOptionServerSideApply(serverSideApply, u.ForceConflicts),
-		kube.ClientUpdateOptionUpgradeClientSideFieldManager(upgradeClientSideFieldManager))
+		kube.ClientUpdateOptionUpgradeClientSideFieldManager(upgradeClientSideFieldManager),
+		kube.ClientUpdateOptionFieldValidationDirective(fieldValidationDirective))
 	if err != nil {
 		u.cfg.recordRelease(originalRelease)
 		u.reportToPerformUpgrade(c, upgradedRelease, results.Created, err)
@@ -497,7 +502,7 @@ func (u *Upgrade) releasingUpgrade(c chan<- resultMessage, upgradedRelease *rele
 
 	// post-upgrade hooks
 	if !u.DisableHooks {
-		if err := u.cfg.execHook(upgradedRelease, release.HookPostUpgrade, u.WaitStrategy, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(upgradedRelease, release.HookPostUpgrade, u.WaitStrategy, u.Timeout, serverSideApply, u.DisableOpenAPIValidation); err != nil {
 			u.reportToPerformUpgrade(c, upgradedRelease, results.Created, fmt.Errorf("post-upgrade hooks failed: %s", err))
 			return
 		}

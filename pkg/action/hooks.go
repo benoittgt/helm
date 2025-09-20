@@ -32,7 +32,7 @@ import (
 )
 
 // execHook executes all of the hooks for the given hook event.
-func (cfg *Configuration) execHook(rl *release.Release, hook release.HookEvent, waitStrategy kube.WaitStrategy, timeout time.Duration, serverSideApply bool) error {
+func (cfg *Configuration) execHook(rl *release.Release, hook release.HookEvent, waitStrategy kube.WaitStrategy, timeout time.Duration, serverSideApply bool, disableOpenAPIValidation bool) error {
 	executingHooks := []*release.Hook{}
 
 	for _, h := range rl.Hooks {
@@ -72,9 +72,14 @@ func (cfg *Configuration) execHook(rl *release.Release, hook release.HookEvent, 
 		h.LastRun.Phase = release.HookPhaseUnknown
 
 		// Create hook resources
+		fieldValidationDirective := kube.FieldValidationDirectiveWarn
+		if disableOpenAPIValidation {
+			fieldValidationDirective = kube.FieldValidationDirectiveIgnore
+		}
 		if _, err := cfg.KubeClient.Create(
 			resources,
-			kube.ClientCreateOptionServerSideApply(serverSideApply, false)); err != nil {
+			kube.ClientCreateOptionServerSideApply(serverSideApply, false),
+			kube.ClientCreateOptionFieldValidationDirective(fieldValidationDirective)); err != nil {
 			h.LastRun.CompletedAt = time.Now()
 			h.LastRun.Phase = release.HookPhaseFailed
 			return fmt.Errorf("warning: Hook %s %s failed: %w", hook, h.Path, err)

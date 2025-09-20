@@ -1010,3 +1010,30 @@ func TestInstallRun_UnreachableKubeClient(t *testing.T) {
 	assert.Nil(t, res)
 	assert.ErrorContains(t, err, "connection refused")
 }
+
+func TestInstallRelease_DisableOpenAPIValidation(t *testing.T) {
+	is := assert.New(t)
+
+	// Test with DisableOpenAPIValidation = false (default behavior)
+	instAction1 := installAction(t)
+	instAction1.DisableOpenAPIValidation = false
+
+	chrt := buildChart()
+	vals := map[string]interface{}{}
+
+	_, err := instAction1.RunWithContext(t.Context(), chrt, vals)
+	// Should succeed with fake client
+	is.NoError(err)
+
+	// Test with DisableOpenAPIValidation = true
+	instAction2 := installAction(t)
+	instAction2.DisableOpenAPIValidation = true
+
+	_, err = instAction2.RunWithContext(t.Context(), chrt, vals)
+	// Should also succeed with fake client
+	is.NoError(err)
+
+	// The test passes if both configurations work without errors
+	// In a real Kubernetes environment, the DisableOpenAPIValidation flag would
+	// prevent validation failures for resources that don't match the OpenAPI schema
+}

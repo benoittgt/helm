@@ -386,7 +386,7 @@ data:
 			}
 
 			serverSideApply := true
-			err := configuration.execHook(&tc.inputRelease, hookEvent, kube.StatusWatcherStrategy, 600, serverSideApply)
+			err := configuration.execHook(&tc.inputRelease, hookEvent, kube.StatusWatcherStrategy, 600, serverSideApply, false)
 
 			if !reflect.DeepEqual(kubeClient.deleteRecord, tc.expectedDeleteRecord) {
 				t.Fatalf("Got unexpected delete record, expected: %#v, but got: %#v", kubeClient.deleteRecord, tc.expectedDeleteRecord)
@@ -401,4 +401,37 @@ data:
 			}
 		})
 	}
+}
+
+func TestExecHook_DisableOpenAPIValidation(t *testing.T) {
+	is := assert.New(t)
+	config := actionConfigFixture(t)
+
+	// Create a minimal hook for testing
+	hook := &release.Hook{
+		Name: "test-hook",
+		Kind: "ConfigMap",
+		Path: "test-hook",
+		Manifest: `kind: ConfigMap
+metadata:
+  name: test-hook
+  annotations:
+    "helm.sh/hook": pre-install
+data:
+  foo: bar`,
+		Events: []release.HookEvent{release.HookPreInstall},
+	}
+
+	rel := &release.Release{
+		Name:      "test-release",
+		Namespace: "default",
+		Hooks:     []*release.Hook{hook},
+	}
+
+	// Test both validation settings - both should work with fake client
+	err := config.execHook(rel, release.HookPreInstall, kube.StatusWatcherStrategy, 300*time.Second, true, false)
+	is.NoError(err, "execHook should work with validation enabled")
+
+	err = config.execHook(rel, release.HookPreInstall, kube.StatusWatcherStrategy, 300*time.Second, true, true)
+	is.NoError(err, "execHook should work with validation disabled")
 }

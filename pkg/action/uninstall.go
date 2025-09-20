@@ -115,7 +115,7 @@ func (u *Uninstall) Run(name string) (*release.UninstallReleaseResponse, error) 
 
 	if !u.DisableHooks {
 		serverSideApply := true
-		if err := u.cfg.execHook(rel, release.HookPreDelete, u.WaitStrategy, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(rel, release.HookPreDelete, u.WaitStrategy, u.Timeout, serverSideApply, true); err != nil {
 			return res, err
 		}
 	} else {
@@ -145,7 +145,7 @@ func (u *Uninstall) Run(name string) (*release.UninstallReleaseResponse, error) 
 
 	if !u.DisableHooks {
 		serverSideApply := true
-		if err := u.cfg.execHook(rel, release.HookPostDelete, u.WaitStrategy, u.Timeout, serverSideApply); err != nil {
+		if err := u.cfg.execHook(rel, release.HookPostDelete, u.WaitStrategy, u.Timeout, serverSideApply, true); err != nil {
 			errs = append(errs, err)
 		}
 	}

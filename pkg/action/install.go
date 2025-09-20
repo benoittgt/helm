@@ -186,9 +186,14 @@ func (i *Install) installCRDs(crds []chart.CRD) error {
 		}
 
 		// Send them to Kube
+		fieldValidationDirective := kube.FieldValidationDirectiveWarn
+		if i.DisableOpenAPIValidation {
+			fieldValidationDirective = kube.FieldValidationDirectiveIgnore
+		}
 		if _, err := i.cfg.KubeClient.Create(
 			res,
-			kube.ClientCreateOptionServerSideApply(i.ServerSideApply, i.ForceConflicts)); err != nil {
+			kube.ClientCreateOptionServerSideApply(i.ServerSideApply, i.ForceConflicts),
+			kube.ClientCreateOptionFieldValidationDirective(fieldValidationDirective)); err != nil {
 			// If the error is CRD already exists, continue.
 			if apierrors.IsAlreadyExists(err) {
 				crdName := res[0].Name
@@ -424,9 +429,14 @@ func (i *Install) RunWithContext(ctx context.Context, ch ci.Charter, vals map[st
 		if err != nil {
 			return nil, err
 		}
+		fieldValidationDirective := kube.FieldValidationDirectiveWarn
+		if i.DisableOpenAPIValidation {
+			fieldValidationDirective = kube.FieldValidationDirectiveIgnore
+		}
 		if _, err := i.cfg.KubeClient.Create(
 			resourceList,
-			kube.ClientCreateOptionServerSideApply(i.ServerSideApply, false)); err != nil && !apierrors.IsAlreadyExists(err) {
+			kube.ClientCreateOptionServerSideApply(i.ServerSideApply, false),
+			kube.ClientCreateOptionFieldValidationDirective(fieldValidationDirective)); err != nil && !apierrors.IsAlreadyExists(err) {
 			return nil, err
 		}
 	}
@@ -492,7 +502,7 @@ func (i *Install) performInstall(rel *release.Release, toBeAdopted kube.Resource
 	var err error
 	// pre-install hooks
 	if !i.DisableHooks {
-		if err := i.cfg.execHook(rel, release.HookPreInstall, i.WaitStrategy, i.Timeout, i.ServerSideApply); err != nil {
+		if err := i.cfg.execHook(rel, release.HookPreInstall, i.WaitStrategy, i.Timeout, i.ServerSideApply, i.DisableOpenAPIValidation); err != nil {
 			return rel, fmt.Errorf("failed pre-install: %s", err)
 		}
 	}
@@ -500,10 +510,15 @@ func (i *Install) performInstall(rel *release.Release, toBeAdopted kube.Resource
 	// At this point, we can do the install. Note that before we were detecting whether to
 	// do an update, but it's not clear whether we WANT to do an update if the reuse is set
 	// to true, since that is basically an upgrade operation.
+	fieldValidationDirective := kube.FieldValidationDirectiveWarn
+	if i.DisableOpenAPIValidation {
+		fieldValidationDirective = kube.FieldValidationDirectiveIgnore
+	}
 	if len(toBeAdopted) == 0 && len(resources) > 0 {
 		_, err = i.cfg.KubeClient.Create(
 			resources,
-			kube.ClientCreateOptionServerSideApply(i.ServerSideApply, false))
+			kube.ClientCreateOptionServerSideApply(i.ServerSideApply, false),
+			kube.ClientCreateOptionFieldValidationDirective(fieldValidationDirective))
 	} else if len(resources) > 0 {
 		updateThreeWayMergeForUnstructured := i.TakeOwnership && !i.ServerSideApply // Use three-way merge when taking ownership (and not using server-side apply)
 		_, err = i.cfg.KubeClient.Update(
@@ -512,7 +527,8 @@ func (i *Install) performInstall(rel *release.Release, toBeAdopted kube.Resource
 			kube.ClientUpdateOptionForceReplace(i.ForceReplace),
 			kube.ClientUpdateOptionServerSideApply(i.ServerSideApply, i.ForceConflicts),
 			kube.ClientUpdateOptionThreeWayMergeForUnstructured(updateThreeWayMergeForUnstructured),
-			kube.ClientUpdateOptionUpgradeClientSideFieldManager(true))
+			kube.ClientUpdateOptionUpgradeClientSideFieldManager(true),
+			kube.ClientUpdateOptionFieldValidationDirective(fieldValidationDirective))
 	}
 	if err != nil {
 		return rel, err
@@ -533,7 +549,7 @@ func (i *Install) performInstall(rel *release.Release, toBeAdopted kube.Resource
 	}
 
 	if !i.DisableHooks {
-		if err := i.cfg.execHook(rel, release.HookPostInstall, i.WaitStrategy, i.Timeout, i.ServerSideApply); err != nil {
+		if err := i.cfg.execHook(rel, release.HookPostInstall, i.WaitStrategy, i.Timeout, i.ServerSideApply, i.DisableOpenAPIValidation); err != nil {
 			return rel, fmt.Errorf("failed post-install: %s", err)
 		}
 	}

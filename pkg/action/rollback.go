@@ -192,7 +192,7 @@ func (r *Rollback) performRollback(currentRelease, targetRelease *release.Releas
 	// pre-rollback hooks
 
 	if !r.DisableHooks {
-		if err := r.cfg.execHook(targetRelease, release.HookPreRollback, r.WaitStrategy, r.Timeout, serverSideApply); err != nil {
+		if err := r.cfg.execHook(targetRelease, release.HookPreRollback, r.WaitStrategy, r.Timeout, serverSideApply, true); err != nil {
 			return targetRelease, err
 		}
 	} else {
@@ -210,7 +210,8 @@ func (r *Rollback) performRollback(currentRelease, targetRelease *release.Releas
 		kube.ClientUpdateOptionForceReplace(r.ForceReplace),
 		kube.ClientUpdateOptionServerSideApply(serverSideApply, r.ForceConflicts),
 		kube.ClientUpdateOptionThreeWayMergeForUnstructured(false),
-		kube.ClientUpdateOptionUpgradeClientSideFieldManager(true))
+		kube.ClientUpdateOptionUpgradeClientSideFieldManager(true),
+		kube.ClientUpdateOptionFieldValidationDirective(kube.FieldValidationDirectiveIgnore))
 
 	if err != nil {
 		msg := fmt.Sprintf("Rollback %q failed: %s", targetRelease.Name, err)
@@ -255,7 +256,7 @@ func (r *Rollback) performRollback(currentRelease, targetRelease *release.Releas
 
 	// post-rollback hooks
 	if !r.DisableHooks {
-		if err := r.cfg.execHook(targetRelease, release.HookPostRollback, r.WaitStrategy, r.Timeout, serverSideApply); err != nil {
+		if err := r.cfg.execHook(targetRelease, release.HookPostRollback, r.WaitStrategy, r.Timeout, serverSideApply, true); err != nil {
 			return targetRelease, err
 		}
 	}
