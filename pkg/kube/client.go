@@ -1092,6 +1092,93 @@ func upgradeClientSideFieldManager(info *resource.Info, dryRun bool, fieldValida
 	return patched, err
 }
 
+// deduplicateArrayByMergeKey removes duplicate entries from an array based on a merge key,
+// keeping the last occurrence of each duplicate. This matches the behavior of strategic
+// merge patch and Kubernetes runtime (last value wins).
+func deduplicateArrayByMergeKey(arr []interface{}, mergeKey string) []interface{} {
+	if len(arr) == 0 {
+		return arr
+	}
+
+	// Track the index of the last occurrence of each merge key value
+	lastIndex := make(map[string]int)
+	for i, item := range arr {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		keyVal, found := itemMap[mergeKey]
+		if !found {
+			continue
+		}
+		// Store the latest index for this key value
+		lastIndex[fmt.Sprintf("%v", keyVal)] = i
+	}
+
+	// Build result keeping only the last occurrence of each key
+	result := []interface{}{}
+	for i, item := range arr {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			result = append(result, item)
+			continue
+		}
+		keyVal, found := itemMap[mergeKey]
+		if !found {
+			result = append(result, item)
+			continue
+		}
+		// Keep this item if it's the last occurrence of its key
+		if lastIndex[fmt.Sprintf("%v", keyVal)] == i {
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
+// deduplicateMergeListsInObject recursively finds and deduplicates arrays that have merge keys,
+// keeping the last occurrence of each duplicate. This reuses the same approach that client-side
+// apply uses, ensuring consistency with Kubernetes behavior.
+func deduplicateMergeListsInObject(obj map[string]interface{}, schema strategicpatch.LookupPatchMeta) error {
+	for key, val := range obj {
+		switch v := val.(type) {
+		case map[string]interface{}:
+			// Recurse into nested maps
+			subschema, _, err := schema.LookupPatchMetadataForStruct(key)
+			if err == nil {
+				if err := deduplicateMergeListsInObject(v, subschema); err != nil {
+					return err
+				}
+			}
+
+		case []interface{}:
+			// Check if this array has a merge key
+			subschema, patchMeta, err := schema.LookupPatchMetadataForSlice(key)
+			if err != nil {
+				continue
+			}
+
+			mergeKey := patchMeta.GetPatchMergeKey()
+			if mergeKey != "" {
+				// Deduplicate keeping last occurrence (same as strategic merge patch)
+				deduplicated := deduplicateArrayByMergeKey(v, mergeKey)
+				obj[key] = deduplicated
+
+				// Recurse into array elements
+				for _, item := range deduplicated {
+					if itemMap, ok := item.(map[string]interface{}); ok {
+						if err := deduplicateMergeListsInObject(itemMap, subschema); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // Patch reource using server-side apply
 func patchResourceServerSide(target *resource.Info, dryRun bool, forceConflicts bool, fieldValidationDirective FieldValidationDirective) error {
 	helper := resource.NewHelper(
@@ -1100,6 +1187,20 @@ func patchResourceServerSide(target *resource.Info, dryRun bool, forceConflicts 
 		DryRun(dryRun).
 		WithFieldManager(getManagedFieldsManager()).
 		WithFieldValidation(string(fieldValidationDirective))
+
+	// Deduplicate merge lists before sending to avoid server-side apply validation errors.
+	// This reuses the same logic as client-side apply, ensuring last-value-wins behavior.
+	versionedObject := AsVersioned(target)
+	if versionedObject != nil {
+		// Only deduplicate if we can get patch metadata (built-in types)
+		if _, isUnstructured := versionedObject.(runtime.Unstructured); !isUnstructured {
+			if patchMeta, err := strategicpatch.NewPatchMetaFromStruct(versionedObject); err == nil {
+				if unstructuredObj, ok := target.Object.(*unstructured.Unstructured); ok {
+					_ = deduplicateMergeListsInObject(unstructuredObj.Object, patchMeta)
+				}
+			}
+		}
+	}
 
 	// Send the full object to be applied on the server side.
 	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, target.Object)
