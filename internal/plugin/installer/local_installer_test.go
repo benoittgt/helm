@@ -146,3 +146,83 @@ func TestLocalInstallerTarball(t *testing.T) {
 		t.Fatalf("plugin not found at %s: %v", i.Path(), err)
 	}
 }
+
+func TestLocalInstaller_Path(t *testing.T) {
+	t.Run("custom directory with directory source", func(t *testing.T) {
+		customPluginsDir := "/custom/helm/plugins"
+		t.Setenv("HELM_PLUGINS", customPluginsDir)
+
+		source := "../testdata/plugdir/good/echo-v1"
+		installer, err := NewLocalInstaller(source)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		absSource, _ := filepath.Abs(source)
+		expectedPath := filepath.Join(customPluginsDir, filepath.Base(absSource))
+		actualPath := installer.Path()
+
+		if actualPath != expectedPath {
+			t.Errorf("expected path %q, got %q", expectedPath, actualPath)
+		}
+	})
+
+	t.Run("custom directory with archive source", func(t *testing.T) {
+		customPluginsDir := "/tmp/custom-plugins"
+		t.Setenv("HELM_PLUGINS", customPluginsDir)
+
+		tempDir := t.TempDir()
+		tarballPath := filepath.Join(tempDir, "test-plugin-1.0.0.tar.gz")
+
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		tw := tar.NewWriter(gw)
+
+		files := []struct {
+			Name string
+			Body string
+			Mode int64
+		}{
+			{"test-plugin/plugin.yaml", "name: test-plugin\nversion: 1.0.0", 0644},
+		}
+
+		for _, file := range files {
+			hdr := &tar.Header{
+				Name: file.Name,
+				Mode: file.Mode,
+				Size: int64(len(file.Body)),
+			}
+			if err := tw.WriteHeader(hdr); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tw.Write([]byte(file.Body)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := tw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := gw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(tarballPath, buf.Bytes(), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		installer, err := NewLocalInstaller(tarballPath)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !installer.isArchive {
+			t.Error("expected isArchive to be true")
+		}
+
+		expectedPath := filepath.Join(customPluginsDir, "test-plugin")
+		actualPath := installer.Path()
+
+		if actualPath != expectedPath {
+			t.Errorf("expected path %q, got %q", expectedPath, actualPath)
+		}
+	})
+}

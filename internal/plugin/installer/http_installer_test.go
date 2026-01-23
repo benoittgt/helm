@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"helm.sh/helm/v4/internal/test/ensure"
+	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/helmpath"
 )
@@ -567,6 +568,7 @@ func TestExtractPluginInSubdirectory(t *testing.T) {
 		CacheDir:   tempDir,
 		PluginName: "subdir-plugin",
 		base:       newBase(source),
+		settings:   cli.New(),
 		extractor:  &TarGzExtractor{},
 	}
 
@@ -597,5 +599,23 @@ func TestExtractPluginInSubdirectory(t *testing.T) {
 	expectedRoot := filepath.Join(tempDir, "my-plugin")
 	if pluginRoot != expectedRoot {
 		t.Errorf("Expected plugin root to be %s but got %s", expectedRoot, pluginRoot)
+	}
+}
+
+func TestHTTPInstaller_Path(t *testing.T) {
+	customPluginsDir := "/custom/helm/plugins"
+	t.Setenv("HELM_PLUGINS", customPluginsDir)
+
+	source := "https://example.com/fake-plugin-0.0.1.tar.gz"
+	installer, err := NewHTTPInstaller(source)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedPath := filepath.Join(customPluginsDir, "fake-plugin")
+	actualPath := installer.Path()
+
+	if actualPath != expectedPath {
+		t.Errorf("expected path %q, got %q", expectedPath, actualPath)
 	}
 }
